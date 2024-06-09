@@ -1,3 +1,4 @@
+from multiprocessing import Pool, cpu_count
 import pyautogui
 import keyboard
 import time
@@ -7,6 +8,9 @@ import numpy as np
 import win32gui
 import win32api
 import win32con
+import time
+
+from mousemove import human_like_mouse_move
 
 # Function to draw transparent rectangles (only borders) on the screen
 def draw_lines_around_item(left, top, right, bottom):
@@ -61,9 +65,10 @@ def click_and_draw_items():
     w, h = d1_t.shape[::-1]
 
     while True:
-
         if running:
             print('running...')
+            start_time = time.time()
+
             gray_screenshot = cv2.cvtColor(cv2.cvtColor(np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
 
             unique_points1 = match_template(gray_screenshot, i1_t, threshold, min_distance)
@@ -72,45 +77,67 @@ def click_and_draw_items():
 
             unique_points = unique_points1 + unique_points2 + unique_points3
 
+            print(f'uq collecting time: {(time.time() - start_time) * 1000:.2f}ms')
+            start_time = time.time()
+
+
             # Draw lines around the detected items
             for pt in unique_points:
                 left, top = pt
                 right, bottom = left + w, top + h
-                draw_lines_around_item(left, top, right, bottom)
+                if drawing:
+                    draw_lines_around_item(left, top, right, bottom)
+                start = np.array(pyautogui.position()).reshape(1, 2)
+                end = np.array([pt[0] + w / 2, pt[1] + h / 2]).reshape(1, 2)
+                if moving:
+                    start_time_m = time.time()
+                    human_like_mouse_move(start, end)
+                    print(f'sm time: {(time.time() - start_time_m) * 1000:.2f}ms')
+
                 # pyautogui.click(pt[0] + w / 2, pt[1] + h / 2)
+
+            print(f'md time: {(time.time() - start_time) * 1000:.2f}ms')
+            
         else:
             print('waiting...')
 
         
         time.sleep(1)
 
-# Function to start the autoclicker
-def start_autoclicker():
+def toggle_autoclicker():
     global running, click_thread
-    running = True
+    running = not running
     if click_thread == None:
         click_thread = threading.Thread(target=click_and_draw_items)
         click_thread.start()
 
-# Function to stop the autoclicker
-def stop_autoclicker():
-    global running
-    running = False
-    # click_thread.stop()
+def toggle_moving():
+    global moving
+    moving = not moving
+
+def toggle_drawing():
+    global drawing
+    drawing = not drawing
 
 running = False
+moving = False
+drawing = False
 click_thread = None
 
 # Main program
 if __name__ == "__main__":
-    print("Press 's' to start the autoclicker")
-    print("Press 'a' to pause the autoclicker")
+    print("Press 's' to toggle autoclicker")
+    print("Press 'm' to toggle mouse moving")
+    print("Press 'd' to toggle drawing")
     print("Press 'q' to exit")
 
     # Keyboard event listeners
-    keyboard.add_hotkey('s', start_autoclicker)
-    keyboard.add_hotkey('a', stop_autoclicker)
-    start_autoclicker()
+    keyboard.add_hotkey('s', toggle_autoclicker)
+    keyboard.add_hotkey('m', toggle_moving)
+    keyboard.add_hotkey('d', toggle_drawing)
+
+
+    toggle_autoclicker()
 
     # Keep the program running
     keyboard.wait('q')
