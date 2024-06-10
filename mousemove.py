@@ -1,6 +1,6 @@
+# Save this as mousemove.py
 import time
 import pyautogui
-import numpy as np
 import random
 
 
@@ -25,4 +25,4 @@ def human_like_mouse_move(start, end):
     points = bezier_curve(start, control1, end, num_points=3)
 
     for point in points:
-        pyautogui.moveTo(point[0], point[1])  #
+        pyautogui.moveTo(point[0], point[1])

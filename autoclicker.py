@@ -5,35 +5,30 @@ import time
 import threading
 import cv2
 import numpy as np
-import win32gui
-import win32api
-import win32con
 import time
 import random
-
+import Quartz
 
 from mousemove import human_like_mouse_move
 
 
 def draw_lines_around_item(left, top, right, bottom):
-    hwnd = win32gui.GetDesktopWindow()
-    dc = win32gui.GetWindowDC(hwnd)
+    # Create a Quartz drawing context
+    ctx = Quartz.CGContextCreateWithWindow(Quartz.CGMainDisplayID())
 
-    # Create a pen for drawing
-    pen = win32gui.CreatePen(win32con.PS_SOLID, 3, win32api.RGB(0, 255, 0))
-    old_pen = win32gui.SelectObject(dc, pen)
+    # Set the drawing color to green
+    Quartz.CGContextSetRGBStrokeColor(ctx, 0, 1, 0, 1)
+    Quartz.CGContextSetLineWidth(ctx, 3)
 
-    # Drawing the lines with fewer calls to MoveToEx and LineTo
-    win32gui.MoveToEx(dc, left, top)
-    win32gui.LineTo(dc, right, top)
-    win32gui.LineTo(dc, right, bottom)
-    win32gui.LineTo(dc, left, bottom)
-    win32gui.LineTo(dc, left, top)
+    # Draw the rectangle
+    Quartz.CGContextMoveToPoint(ctx, left, top)
+    Quartz.CGContextAddLineToPoint(ctx, right, top)
+    Quartz.CGContextAddLineToPoint(ctx, right, bottom)
+    Quartz.CGContextAddLineToPoint(ctx, left, bottom)
+    Quartz.CGContextAddLineToPoint(ctx, left, top)
 
-    # Cleanup GDI objects
-    win32gui.SelectObject(dc, old_pen)
-    win32gui.DeleteObject(pen)
-    win32gui.ReleaseDC(hwnd, dc)
+    # Stroke the path
+    Quartz.CGContextStrokePath(ctx)
 
 
 def filter_unique_points(points, min_distance):
@@ -60,7 +55,6 @@ def nextStep():
     if not ensureHead():
         return
     mouse_x, mouse_y = pyautogui.position()
-    # regSize = 500
 
     regX = headPt[0]
     regY = headPt[1]
@@ -89,22 +83,21 @@ def nextStep():
         start_time = time.time()
 
         if drawing:
-
             draw_lines_around_item(item_x, item_y, item_x + w, item_y + h)
 
-        print(f"drawing time: {( time.time() - start_time) * 1000} ms")
+        print(f"drawing time: {(time.time() - start_time) * 1000} ms")
 
         start_time = time.time()
 
         if moving:
             pyautogui.click(item_x + random.uniform(0, w),
                             item_y + random.uniform(0, h))
-            # human_like_mouse_move((mouse_x, mouse_y), (item_x + w / 2, item_y + h / 2))
 
-        print(f"moving time: {( time.time() - start_time) * 1000} ms")
-
+        print(f"moving time: {(time.time() - start_time) * 1000} ms")
 
 # Function to perform the clicking and draw lines around detected items
+
+
 def run():
     while True:
         if running:
@@ -112,14 +105,13 @@ def run():
             nextStep()
         else:
             print('waiting...')
-
         time.sleep(0.01)
 
 
 def toggle_run():
     global running, click_thread
     running = not running
-    if click_thread == None:
+    if click_thread is None:
         click_thread = threading.Thread(target=run)
         click_thread.start()
 
@@ -135,16 +127,14 @@ def toggle_drawing():
 
 
 def ensureHead():
-    # if not headPt:
     global headPt
     gray_scr = cv2.cvtColor(cv2.cvtColor(
         np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
-
     matches = match_template(gray_scr, head_t, threshold, min_distance)
     if matches:
         headPt = (matches[0][0], matches[0][1])
         return True
-    # return False
+    return False
 
 
 head_t = cv2.imread('templates_png/head.png', 0)
