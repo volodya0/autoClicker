@@ -1,181 +1,212 @@
-from multiprocessing import Pool, cpu_count
-import pyautogui
-import keyboard
+import sys
+import mss
 import time
 import threading
 import cv2
 import numpy as np
-import win32gui
-import win32api
-import win32con
+import pygame.draw_py
 import time
-import random
+import pygame
 
 
-from mousemove import human_like_mouse_move
-
-
-def draw_lines_around_item(left, top, right, bottom):
-    hwnd = win32gui.GetDesktopWindow()
-    dc = win32gui.GetWindowDC(hwnd)
-
-    # Create a pen for drawing
-    pen = win32gui.CreatePen(win32con.PS_SOLID, 3, win32api.RGB(0, 255, 0))
-    old_pen = win32gui.SelectObject(dc, pen)
-
-    # Drawing the lines with fewer calls to MoveToEx and LineTo
-    win32gui.MoveToEx(dc, left, top)
-    win32gui.LineTo(dc, right, top)
-    win32gui.LineTo(dc, right, bottom)
-    win32gui.LineTo(dc, left, bottom)
-    win32gui.LineTo(dc, left, top)
-
-    # Cleanup GDI objects
-    win32gui.SelectObject(dc, old_pen)
-    win32gui.DeleteObject(pen)
-    win32gui.ReleaseDC(hwnd, dc)
-
-
-def filter_unique_points(points, min_distance):
-    unique_points = []
+def filterUniquePoints(points, md = None):
+    md = md if md else min_distance
+    uniquePoints = []
     for pt in points:
-        if all(np.linalg.norm(np.array(pt) - np.array(unique_pt)) > min_distance for unique_pt in unique_points):
-            unique_points.append(pt)
-    return unique_points
+        if all(np.linalg.norm((np.array(pt) - np.array(unique_pt)) > md) for unique_pt in uniquePoints):
+            uniquePoints.append(pt)
+    return uniquePoints
+ 
 
+def matchTemplate(scr, template, th = 0.8, md = None, filter = True):    
+    # start_time = time.time()
+    res = cv2.matchTemplate(scr, template, cv2.TM_CCOEFF_NORMED)
+    # print(f"time1: {( time.time() - start_time) * 1000} ms")
+    
+    # start_time = time.time()
+    loc = np.where(res >= th)
+    # print(f"time2: {( time.time() - start_time) * 1000} ms")
+    
+    # start_time = time.time()
+    points = list(zip(*loc[::-1]))
+    # print(f"time3: {( time.time() - start_time) * 1000} ms")
+    
+    # start_time = time.time()
+    if filter: points = filterUniquePoints(points, md)
+    # print(f"time4: {( time.time() - start_time) * 1000} ms")
+        
+    return points
 
-def match_template(gray_screenshot, template, threshold, min_distance):
-    res = cv2.matchTemplate(gray_screenshot, template, cv2.TM_CCOEFF_NORMED)
-    loc = np.where(res >= threshold)
-    match_points = list(zip(*loc[::-1]))
-    unique_points = filter_unique_points(match_points, min_distance)
-    return unique_points
+def scaleImg(image, sF = None):
+    sF = sF if sF else scaleFactor
+    height, width = image.shape[:2]
+    newSize = (int(width * sF), int(height * sF))
+    return cv2.resize(image, newSize)
 
+def unScalePoints(points, sF = None):
+    sF = sF if sF else scaleFactor
+    return [(int(pt[0] / sF), int(pt[1] / sF)) for pt in points]
 
-def euclidean_distance(pt1, pt2):
-    return ((pt1[0] - pt2[0]) ** 2 + (pt1[1] - pt2[1]) ** 2) ** 0.5
+def captureScreen(rect=None):
+    with mss.mss() as sct:
+        rect = {'left': rect[0], 'top': rect[1], 'width': rect[2], 'height': rect[3]} if rect else sct.monitors[0]
+        screenshot = sct.grab(rect)
+        img = np.array(screenshot)
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+def drawPoints(points, yOffset = 0, color = None):
+    for pt in points:
+        x, y = pt
+        pygame.draw.rect(pyGameScreen, color if color else WHITE, pygame.Rect(x, y + yOffset, itemWidth, itemHeight), 2)
+        
 
+def detectI(scrScaled): 
+    m1 = matchTemplate(scrScaled, i1TemScaled, 0.7, filter=False)
+    m2 = matchTemplate(scrScaled, i2TemScaled, 0.7, filter=False)
+    
+    return  unScalePoints( filterUniquePoints(m1 + m2))
+
+def detectD(scrScaled): 
+    return unScalePoints( matchTemplate(scrScaled, d1TemScaled, 0.7))
 
 def nextStep():
-    if not ensureHead():
-        return
-    mouse_x, mouse_y = pyautogui.position()
-    # regSize = 500
-
-    regX = headPt[0]
-    regY = headPt[1]
-
-    scr = pyautogui.screenshot(region=(int(regX), int(
-        regY + headHeight), int(headWidth), int(750)))
-    gray_scr = cv2.cvtColor(cv2.cvtColor(
-        np.array(scr), cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
-
-    draw_lines_around_item(regX - 10, regY + headHeight,
-                           regX + headWidth + 20, regY + 750)
-
-    unique_points1 = match_template(gray_scr, i1_t, threshold, min_distance)
-    unique_points2 = match_template(gray_scr, i2_t, threshold, min_distance)
-    unique_points3 = match_template(gray_scr, d1_t, threshold, min_distance)
-
-    unique_points = unique_points1 + unique_points2 + unique_points3
-
-    if unique_points:
-        nearest = min(unique_points, key=lambda pt: euclidean_distance(
-            (pt[0] + w/2, pt[1] + h/2), (mouse_x - regX, mouse_y - regY)))
-        item_x, item_y = nearest
-        item_x += regX
-        item_y += regY
-
+    start_time = time.time()
+    
+    scrScaled = getGameScr()
+    
+    if scrScaled is None:
+        pyGameScreen.fill(RED)
+    else:
+        heightScaled = scrScaled.shape[0]
+        areaOffsetTop = gameH * 0.2
+        areaOffsetBottom = 80
+        areaScr = scrScaled[int(areaOffsetTop * scaleFactor):int(heightScaled-(areaOffsetBottom * scaleFactor)), :]
+        
+        print(f"area time: {( time.time() - start_time) * 1000} ms")
+                
+        pyGameScreen.fill(BLACK)
+        
+        gameX = headPt[0]
+        gameY = headPt[1] + headH
+        
         start_time = time.time()
-
-        if drawing:
-
-            draw_lines_around_item(item_x, item_y, item_x + w, item_y + h)
-
-        print(f"drawing time: {( time.time() - start_time) * 1000} ms")
-
+        
+        # cv2.imshow('areaScr', areaScr)
+        # cv2.waitKey(0)
+        
+        pointsD = detectD(areaScr)
+        pointsI = detectI(areaScr)
+                 
+        print(f"detect time: {( time.time() - start_time) * 1000} ms")
+        
         start_time = time.time()
+        
+        
+        if len(pointsD):
+            drawPoints(pointsD, areaOffsetTop, BLUE)
+            
+        if len(pointsI):
+            drawPoints(pointsI, areaOffsetTop, GREEN)
+ 
+        print(f"drawD time: {( time.time() - start_time) * 1000} ms")
 
-        if moving:
-            pyautogui.click(item_x + random.uniform(0, w),
-                            item_y + random.uniform(0, h))
-            # human_like_mouse_move((mouse_x, mouse_y), (item_x + w / 2, item_y + h / 2))
 
-        print(f"moving time: {( time.time() - start_time) * 1000} ms")
+        # pygame.draw.circle(pyGameScreen, WHITE, ( random.uniform(0, 100), 100), 50)
+        # pygame.draw.rect(pyGameScreen, RED, (200, 150, 100, 50))
+    start_time = time.time()
+    
+    # pygame.display.flip()
+  
+    
+    print(f"fu time: {( time.time() - start_time) * 1000} ms")
+  
 
 
-# Function to perform the clicking and draw lines around detected items
-def run():
+def ensureHead(ScrScaled):
+    global headPt
+    matches = matchTemplate(ScrScaled, headTemplateSmall, 0.7, 10)
+    
+    # cv2.imshow('ScrScaled', ScrScaled)
+    # cv2.waitKey(0)
+    # cv2.imshow('headTemplateSmall', headTemplateSmall)
+    # cv2.waitKey(0)
+    
+    if matches:
+        headPt = (int(matches[0][0] / scaleFactor), int( matches[0][1] / scaleFactor))
+        return True
+    return False
+
+def getGameScr():
+    global headPt
+    
+    if headPt or ensureHead(scaleImg(captureScreen(), scaleFactor)):
+        x, y = headPt
+        ScrScaled = scaleImg(captureScreen((x, y, gameW, gameH)), scaleFactor)
+        headScaled = ScrScaled[0:int(headH * scaleFactor), :]
+        # cv2.imshow('ScrScaled', ScrScaled)
+        # cv2.imshow('headScaled', headScaled)
+        # cv2.waitKey(0)
+        matches = matchTemplate(headScaled, headTemplateSmall,  0.7)
+        if matches:
+            # cv2.imshow('Scr', scr)
+            # cv2.waitKey(0)
+            return ScrScaled; 
+    
+    return None
+       
+    
+scaleFactor = 0.5
+min_distance = 30
+threshold = 0.75
+
+headTemplate = cv2.imread('templates_png/head.png', 0)
+headTemplateSmall = scaleImg(headTemplate, scaleFactor)
+
+gameW, headH = headTemplate.shape[::-1]
+gameH = 860
+
+i1Tem = cv2.imread('templates_png/small_i.png', 0)
+i2Tem = cv2.imread('templates_png/large_i.png', 0)
+d1Tem = cv2.imread('templates_png/large_d.png', 0)
+
+i1TemScaled = scaleImg(i1Tem, scaleFactor)
+i2TemScaled = scaleImg(i2Tem, scaleFactor)
+d1TemScaled = scaleImg(d1Tem, scaleFactor)
+
+
+itemWidth, itemHeight = d1Tem.shape[::-1]
+
+running = True
+headPt = None
+pyGameScreen = None
+
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+
+pygame.init()
+pyGameScreen = pygame.display.set_mode((gameW, 800))
+pygame.display.set_caption("Detected objects")
+clock = pygame.time.Clock()  
+
+if __name__ == "__main__":
+   
+
     while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                pygame.quit()
+                sys.exit()
+        
         if running:
             print('running...')
             nextStep()
         else:
             print('waiting...')
-
-        time.sleep(0.01)
-
-
-def toggle_run():
-    global running, click_thread
-    running = not running
-    if click_thread == None:
-        click_thread = threading.Thread(target=run)
-        click_thread.start()
-
-
-def toggle_moving():
-    global moving
-    moving = not moving
-
-
-def toggle_drawing():
-    global drawing
-    drawing = not drawing
-
-
-def ensureHead():
-    # if not headPt:
-    global headPt
-    gray_scr = cv2.cvtColor(cv2.cvtColor(
-        np.array(pyautogui.screenshot()), cv2.COLOR_RGB2BGR), cv2.COLOR_BGR2GRAY)
-
-    matches = match_template(gray_scr, head_t, threshold, min_distance)
-    if matches:
-        headPt = (matches[0][0], matches[0][1])
-        return True
-    # return False
-
-
-head_t = cv2.imread('templates_png/head.png', 0)
-headWidth, headHeight = head_t.shape[::-1]
-
-i1_t = cv2.imread('templates_png/small_i.png', 0)
-i2_t = cv2.imread('templates_png/large_i.png', 0)
-d1_t = cv2.imread('templates_png/large_d.png', 0)
-min_distance = 20
-threshold = 0.75
-w, h = d1_t.shape[::-1]
-
-running = False
-moving = False
-drawing = False
-click_thread = None
-headPt = None
-
-# Main program
-if __name__ == "__main__":
-    print("Press 's' to toggle autoclicker")
-    print("Press 'm' to toggle mouse moving")
-    print("Press 'd' to toggle drawing")
-    print("Press 'q' to exit")
-
-    # Keyboard event listeners
-    keyboard.add_hotkey('s', toggle_run)
-    keyboard.add_hotkey('m', toggle_moving)
-    keyboard.add_hotkey('d', toggle_drawing)
-
-    toggle_run()
-
-    # Keep the program running
-    keyboard.wait('q')
+            
+        pygame.display.update()
+        clock.tick(60)
