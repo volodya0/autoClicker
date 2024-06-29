@@ -78,13 +78,8 @@ def getGameScr():
         x, y = headPt
         gameScrScaled = scaleImg(captureScreen((x, y, gameW, gameH)), scaleFactor)
         headScaled = gameScrScaled[0:int(headH * scaleFactor), :]
-        # cv2.imshow('ScrScaled', ScrScaled)
-        # cv2.imshow('headScaled', headScaled)
-        # cv2.waitKey(0)
         matches = matchTemplate(headScaled, headTemplateSmall,  0.7)
         if matches:
-            # cv2.imshow('Scr', scr)
-            # cv2.waitKey(0)
             return gameScrScaled; 
         else: 
             headPt = None
@@ -141,11 +136,6 @@ def nextStep():
     gameX = headPt[0]
     gameY = headPt[1] + headH
     
-    # start_time = time.time()
-    
-    # cv2.imshow('areaScr', areaScr)
-    # cv2.waitKey(0)
-    
     pointsD = detectD(areaScr)
     pointsB = detectB(areaScr)
     pointsI = detectI(areaScr)
@@ -159,6 +149,8 @@ def nextStep():
             notFountCount = 0
             tryRestartGame(scrScaled)
         return
+    
+    notFountCount = 0
     
     # start_time = time.time()
     
@@ -174,8 +166,6 @@ def nextStep():
         if len(pointsD):
             x, y  = pointsD[0]
             humanizedClick((x + gameX, y + gameY + areaOffsetTop -45), itemWidth, itemHeight)
-            # pyautogui.moveTo(x + gameX, y + gameY + areaOffsetTop -45, 0.015)
-            # pyautogui.click()
         elif len(pointsI):
             pointsI.sort(key=lambda pt: pt[1], reverse=True)
             bottom_point = None
@@ -186,8 +176,6 @@ def nextStep():
                 
             if bottom_point:
                 x, y  = bottom_point
-                # pyautogui.moveTo(x + gameX, y + gameY + areaOffsetTop -45, 0.015)
-                # pyautogui.click()
                 humanizedClick((x + gameX, y + gameY + areaOffsetTop -45), itemWidth, itemHeight)
                 
 
