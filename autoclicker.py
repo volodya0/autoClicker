@@ -1,12 +1,12 @@
 import sys
 import mss
 import time
-import threading
 import cv2
 import numpy as np
 import pygame.draw_py
 import time
 import pygame
+from mousemove import humanizedClick
 
 
 def filterUniquePoints(points, md = None):
@@ -19,23 +19,12 @@ def filterUniquePoints(points, md = None):
  
 
 def matchTemplate(scr, template, th = 0.8, md = None, filter = True):    
-    # start_time = time.time()
     res = cv2.matchTemplate(scr, template, cv2.TM_CCOEFF_NORMED)
-    # print(f"time1: {( time.time() - start_time) * 1000} ms")
-    
-    # start_time = time.time()
     loc = np.where(res >= th)
-    # print(f"time2: {( time.time() - start_time) * 1000} ms")
-    
-    # start_time = time.time()
     points = list(zip(*loc[::-1]))
-    # print(f"time3: {( time.time() - start_time) * 1000} ms")
-    
-    # start_time = time.time()
     if filter: points = filterUniquePoints(points, md)
-    # print(f"time4: {( time.time() - start_time) * 1000} ms")
-        
     return points
+
 
 def scaleImg(image, sF = None):
     sF = sF if sF else scaleFactor
@@ -43,9 +32,11 @@ def scaleImg(image, sF = None):
     newSize = (int(width * sF), int(height * sF))
     return cv2.resize(image, newSize)
 
+
 def unScalePoints(points, sF = None):
     sF = sF if sF else scaleFactor
     return [(int(pt[0] / sF), int(pt[1] / sF)) for pt in points]
+
 
 def captureScreen(rect=None):
     with mss.mss() as sct:
@@ -55,72 +46,11 @@ def captureScreen(rect=None):
         img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
         return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     
+    
 def drawPoints(points, yOffset = 0, color = None):
     for pt in points:
         x, y = pt
         pygame.draw.rect(pyGameScreen, color if color else WHITE, pygame.Rect(x, y + yOffset, itemWidth, itemHeight), 2)
-        
-
-def detectI(scrScaled): 
-    m1 = matchTemplate(scrScaled, i1TemScaled, 0.7, filter=False)
-    m2 = matchTemplate(scrScaled, i2TemScaled, 0.7, filter=False)
-    
-    return  unScalePoints( filterUniquePoints(m1 + m2))
-
-def detectD(scrScaled): 
-    return unScalePoints( matchTemplate(scrScaled, d1TemScaled, 0.7))
-
-def nextStep():
-    start_time = time.time()
-    
-    scrScaled = getGameScr()
-    
-    if scrScaled is None:
-        pyGameScreen.fill(RED)
-    else:
-        heightScaled = scrScaled.shape[0]
-        areaOffsetTop = gameH * 0.2
-        areaOffsetBottom = 80
-        areaScr = scrScaled[int(areaOffsetTop * scaleFactor):int(heightScaled-(areaOffsetBottom * scaleFactor)), :]
-        
-        print(f"area time: {( time.time() - start_time) * 1000} ms")
-                
-        pyGameScreen.fill(BLACK)
-        
-        gameX = headPt[0]
-        gameY = headPt[1] + headH
-        
-        start_time = time.time()
-        
-        # cv2.imshow('areaScr', areaScr)
-        # cv2.waitKey(0)
-        
-        pointsD = detectD(areaScr)
-        pointsI = detectI(areaScr)
-                 
-        print(f"detect time: {( time.time() - start_time) * 1000} ms")
-        
-        start_time = time.time()
-        
-        
-        if len(pointsD):
-            drawPoints(pointsD, areaOffsetTop, BLUE)
-            
-        if len(pointsI):
-            drawPoints(pointsI, areaOffsetTop, GREEN)
- 
-        print(f"drawD time: {( time.time() - start_time) * 1000} ms")
-
-
-        # pygame.draw.circle(pyGameScreen, WHITE, ( random.uniform(0, 100), 100), 50)
-        # pygame.draw.rect(pyGameScreen, RED, (200, 150, 100, 50))
-    start_time = time.time()
-    
-    # pygame.display.flip()
-  
-    
-    print(f"fu time: {( time.time() - start_time) * 1000} ms")
-  
 
 
 def ensureHead(ScrScaled):
@@ -137,6 +67,7 @@ def ensureHead(ScrScaled):
         return True
     return False
 
+
 def getGameScr():
     global headPt
     
@@ -152,9 +83,90 @@ def getGameScr():
             # cv2.imshow('Scr', scr)
             # cv2.waitKey(0)
             return ScrScaled; 
+        else: 
+            headPt = None
     
     return None
-       
+               
+
+def detectI(scrScaled): 
+    m1 = matchTemplate(scrScaled, i1TemScaled, 0.85, filter=False)
+    m2 = matchTemplate(scrScaled, i2TemScaled, 0.85, filter=False)
+    
+    return  unScalePoints(filterUniquePoints(m1 + m2))
+
+
+def detectD(scrScaled): 
+    m1 = matchTemplate(scrScaled, d1TemScaled, 0.85, filter=False)
+    m2 = matchTemplate(scrScaled, d2TemScaled, 0.85, filter=False)
+    
+    return  unScalePoints(filterUniquePoints(m1 + m2))
+
+
+def detectB(scrScaled): 
+    m1 = matchTemplate(scrScaled, b1TemScaled, 0.85, filter=False)
+    m2 = matchTemplate(scrScaled, b2TemScaled, 0.85, filter=False)
+    
+    return  unScalePoints(filterUniquePoints(m1 + m2))
+
+
+def nextStep():
+    start_time = time.time()
+    
+    scrScaled = getGameScr()
+    
+    if scrScaled is None:
+        pyGameScreen.fill(RED)
+    else:
+        heightScaled = scrScaled.shape[0]
+        areaOffsetTop = gameH * 0.2
+        areaOffsetBottom = 110
+        areaScr = scrScaled[int(areaOffsetTop * scaleFactor):int(heightScaled-(areaOffsetBottom * scaleFactor)), :]
+        
+        print(f"area time: {( time.time() - start_time) * 1000} ms")
+                
+        pyGameScreen.fill(BLACK)
+        
+        gameX = headPt[0]
+        gameY = headPt[1] + headH
+        
+        start_time = time.time()
+        
+        # cv2.imshow('areaScr', areaScr)
+        # cv2.waitKey(0)
+        
+        pointsD = detectD(areaScr)
+        pointsB = detectB(areaScr)
+        pointsI = detectI(areaScr)
+                 
+        print(f"detect time: {( time.time() - start_time) * 1000} ms")
+        
+        start_time = time.time()
+        
+        if drawingEnabled:
+            if len(pointsB):
+                drawPoints(pointsB, areaOffsetTop, RED)
+            if len(pointsD):
+                drawPoints(pointsD, areaOffsetTop, BLUE)
+            if len(pointsI):
+                drawPoints(pointsI, areaOffsetTop, GREEN)
+            
+        if(clickingEnabled):
+            if len(pointsD):
+                x, y  = pointsD[0]
+                humanizedClick((x + gameX, y + gameY + areaOffsetTop - 40), itemWidth, itemHeight)
+            elif len(pointsI):
+                pointsI.sort(key=lambda pt: pt[1], reverse=True)
+                bottom_point = None
+                for pointI in pointsI:
+                    if all(np.linalg.norm((np.array(pointI) - np.array(b_point))) > 10 for b_point in pointsB):
+                        bottom_point = pointI
+                        break
+                    
+                if bottom_point:
+                    x, y  = bottom_point
+                    humanizedClick((x + gameX, y + gameY + areaOffsetTop - 40), itemWidth, itemHeight)
+
     
 scaleFactor = 0.5
 min_distance = 30
@@ -169,17 +181,25 @@ gameH = 860
 i1Tem = cv2.imread('templates_png/small_i.png', 0)
 i2Tem = cv2.imread('templates_png/large_i.png', 0)
 d1Tem = cv2.imread('templates_png/large_d.png', 0)
+d2Tem = cv2.imread('templates_png/small_d.png', 0)
+b1Tem = cv2.imread('templates_png/small_b.png', 0)
+b2Tem = cv2.imread('templates_png/large_b.png', 0)
 
 i1TemScaled = scaleImg(i1Tem, scaleFactor)
 i2TemScaled = scaleImg(i2Tem, scaleFactor)
 d1TemScaled = scaleImg(d1Tem, scaleFactor)
+d2TemScaled = scaleImg(d2Tem, scaleFactor)
+b1TemScaled = scaleImg(b1Tem, scaleFactor)
+b2TemScaled = scaleImg(b2Tem, scaleFactor)
 
 
 itemWidth, itemHeight = d1Tem.shape[::-1]
 
-running = True
 headPt = None
 pyGameScreen = None
+
+clickingEnabled = False
+drawingEnabled = True
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -188,25 +208,30 @@ GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 
 pygame.init()
-pyGameScreen = pygame.display.set_mode((gameW, 800))
+pyGameScreen = pygame.display.set_mode((380, 600))
 pygame.display.set_caption("Detected objects")
 clock = pygame.time.Clock()  
 
 if __name__ == "__main__":
-   
-
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
                 pygame.quit()
                 sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_c:
+                    clickingEnabled = not clickingEnabled
+                elif event.key == pygame.K_d:
+                    drawingEnabled = not drawingEnabled
         
-        if running:
-            print('running...')
-            nextStep()
-        else:
-            print('waiting...')
-            
+        nextStep()
+              
+        font = pygame.font.Font(None, 20)
+        text1 = font.render("Drawing enabled: " + str(drawingEnabled) + " ('D' key)", True, WHITE)
+        text2 = font.render("Clicking enabled: " + str(clickingEnabled) + " ('C' key)", True, WHITE)
+        pyGameScreen.blit(text1, (10, 10))
+        pyGameScreen.blit(text2, (10, 30))
+        
         pygame.display.update()
-        clock.tick(60)
+        clock.tick(16)

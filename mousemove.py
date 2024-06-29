@@ -26,3 +26,11 @@ def human_like_mouse_move(start, end):
 
     for point in points:
         pyautogui.moveTo(point[0], point[1])  #
+        
+        
+def humanizedClick(point, width, height):
+    x, y = point
+    x += random.randint(-2, width + 2)
+    y += random.randint(-2, height + 2)
+    pyautogui.click(x, y)
+    
