@@ -18,19 +18,19 @@ def bezier_curve(start, control, end, num_points=3):
     return curve_points
 
 
-def human_like_mouse_move(start, end):
+def humanizedMouseMove(start, end, duration=0.1):
     control1 = (start[0] + (end[0] - start[0]) * random.uniform(0.2, 0.8) + random.uniform(-20, 20),
                 start[1] + (end[1] - start[1]) * random.uniform(0.2, 0.8) + random.uniform(-20, 20))
 
     points = bezier_curve(start, control1, end, num_points=3)
 
     for point in points:
-        pyautogui.moveTo(point[0], point[1])  #
+        pyautogui.moveTo(point[0], point[1], random.uniform(duration / len(points) * 0.9, duration / len(points) * 1.1) )  #
         
         
 def humanizedClick(point, width, height):
     x, y = point
-    x += random.randint(-2, width + 2)
-    y += random.randint(-2, height + 2)
+    x += random.randint(-4, width + 4)
+    y += random.randint(-4, height + 4)
     pyautogui.click(x, y)
     
