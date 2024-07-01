@@ -109,11 +109,11 @@ def detectB(scrScaled):
 
 def tryRestartGame(scrScaled):
     x, y = headPt
-    humanizedMouseMove(pyautogui.position(), (x + gameW // 2, y + gameH // 3),0.2)
+    humanizedMouseMove(pyautogui.position(), (x + gameW // 2, y + gameH // 3), 0.2)
     pyautogui.scroll(-300)
-    m = unScalePoints( matchTemplate(scrScaled, endTemScaled, 0.8))
-    if len(m):
-        humanizedClick((x + gameW // 2, y + headH + m[0][1]), 10, 5)
+    foundMatches = unScalePoints(matchTemplate(scrScaled, endTemScaled, 0.8))
+    if len(foundMatches):
+        humanizedClick((x + gameW // 2, y + headH + foundMatches[0][1]), 10, 5)
 
 def nextStep():
     # start_time = time.time()
@@ -250,10 +250,10 @@ if __name__ == "__main__":
         font = pygame.font.Font(None, 20)
         text1 = font.render("Drawing enabled: " + str(drawingEnabled) + " ('D' key)", True, WHITE)
         text2 = font.render("Clicking enabled: " + str(clickingEnabled) + " ('C' key)", True, WHITE)
-        text3 = font.render("Restart enabled: " + str(restartEnabled) + " ('C' key)", True, WHITE)
+        text3 = font.render("Restart enabled: " + str(restartEnabled) + " ('R' key)", True, WHITE)
         pyGameScreen.blit(text1, (10, 10))
         pyGameScreen.blit(text2, (10, 30))
         pyGameScreen.blit(text3, (10, 50))
         
         pygame.display.update()
-        clock.tick(16)
+        time.sleep(0.016)
